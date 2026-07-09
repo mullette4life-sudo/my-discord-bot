@@ -46,7 +46,6 @@ def calculate_change(current_url):
             
         soup = BeautifulSoup(res.text, "html.parser")
         
-        # 1. 한국 시간 기준으로 현재 시각과 1시간 전 시각 구하기
         kst_now = get_kst_now()
         kst_prev = kst_now - timedelta(hours=1)
         
@@ -56,13 +55,10 @@ def calculate_change(current_url):
         current_hour = kst_now.hour
         prev_hour = kst_prev.hour
         
-        # 2. 가이섬 행(tr) 파싱
         all_rows = soup.find_all("tr")
-        
         curr_element = None
         prev_element = None
         
-        # 오늘 행과 (필요시) 어제 행에서 각각 해당 시간 칸 찾기
         for row in all_rows:
             first_cell = row.find("td")
             if first_cell:
@@ -71,7 +67,6 @@ def calculate_change(current_url):
                 if prev_date_str in first_cell.text:
                     prev_element = row.find("td", class_=f"thour{prev_hour}")
         
-        # 3. 변동 판독 로직
         is_curr_out = check_chart_out(curr_element)
         is_prev_out = check_chart_out(prev_element)
         
@@ -79,36 +74,35 @@ def calculate_change(current_url):
             return "미진입🚨"
             
         curr_rank = int(curr_element.text.strip())
-        
         if is_prev_out:
             return f"{curr_rank}위( - )"
             
         prev_rank = int(prev_element.text.strip())
         
-        # 순위 비교 (순위 숫자가 낮아질수록 오른 것임)
         if curr_rank < prev_rank:
             return f"{curr_rank}위( ▲ {prev_rank - curr_rank} )"
         elif curr_rank > prev_rank:
             return f"{curr_rank}위( ▼ {curr_rank - prev_rank} )"
         else:
             return f"{curr_rank}위( - )"
-            
     except:
         return "미진입🚨"
 
 def main():
     kst_now = get_kst_now()
     
-    # 💡 [꼼수 필터] 만약 분(minute)이 5분에서 20분 사이가 아니면 
-    # 업데이트 타이밍이 아니므로 디스코드에 보내지 않고 그냥 종료합니다.
+    # 💤 [새벽 시간 차단 필터] 한국 시간 기준으로 2시, 3시, 4시, 5시, 6시이면 조용히 종료
+    if 2 <= kst_now.hour <= 6:
+        print(f"새벽 {kst_now.hour}시입니다. 알림을 보내지 않고 종료합니다.")
+        return
+
+    # 💡 [꼼수 필터] 분(minute)이 5분에서 20분 사이가 아니면 종료
     if not (5 <= kst_now.minute <= 20):
         print(f"현재 시간 {kst_now.minute}분. 업데이트 타이밍이 아니므로 종료합니다.")
         return
 
-    # 시간 포맷팅
     current_time_str = kst_now.strftime("%m/%d %H시")
     
-    # 각 차트별 크롤링 및 변동폭 계산
     m_rt = calculate_change(f"https://xn--o39an51b2re.com/chart/melon/realtime/trend/ranking/{TRACK_IDS['melon_realtime']}") if TRACK_IDS['melon_realtime'] else "미진입🚨"
     m_top = calculate_change(f"https://xn--o39an51b2re.com/chart/melon/top100/trend/ranking/{TRACK_IDS['melon_top100']}") if TRACK_IDS['melon_top100'] else "미진입🚨"
     m_hot = calculate_change(f"https://xn--o39an51b2re.com/chart/melon/hot100-d30/trend/ranking/{TRACK_IDS['melon_hot100']}") if TRACK_IDS['melon_hot100'] else "미진입🚨"
@@ -116,7 +110,6 @@ def main():
     genie = calculate_change(f"https://xn--o39an51b2re.com/chart/genie/realtime/trend/ranking/{TRACK_IDS['genie_realtime']}") if TRACK_IDS['genie_realtime'] else "미진입🚨"
     bugs = calculate_change(f"https://xn--o39an51b2re.com/chart/bugs/realtime/trend/ranking/{TRACK_IDS['bugs_realtime']}") if TRACK_IDS['bugs_realtime'] else "미진입🚨"
 
-    # 메시지 조립
     message_content = (
         f"{current_time_str}\n"
         f"{TRACK_TAGS}\n"
