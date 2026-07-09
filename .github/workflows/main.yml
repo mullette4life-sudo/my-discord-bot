@@ -2,7 +2,7 @@ name: Hourly Discord Bot
 
 on:
   schedule:
-    - cron: '5 * * * *' # 매시 0분마다 실행 (UTC 기준)
+    - cron: '*/15 * * * *' # 매시 0분마다 실행 (UTC 기준)
   workflow_dispatch: # 수동으로도 실행해볼 수 있게 하는 버튼
 
 jobs:
