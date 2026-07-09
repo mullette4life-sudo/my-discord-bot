@@ -91,7 +91,7 @@ def calculate_change(current_url):
 def main():
     kst_now = get_kst_now()
     
-    # 💤 [새벽 시간 차단 필터] 한국 시간 기준으로 2시, 3시, 4시, 5시, 6시이면 조용히 종료
+    # 💤 [새벽 시간 차단 필터] 한국 시간 기준으로 2시~6시 사이이면 종료
     if 2 <= kst_now.hour <= 6:
         print(f"새벽 {kst_now.hour}시입니다. 알림을 보내지 않고 종료합니다.")
         return
@@ -103,6 +103,7 @@ def main():
 
     current_time_str = kst_now.strftime("%m/%d %H시")
     
+    # 각 차트별 크롤링 및 변동폭 계산 수행
     m_rt = calculate_change(f"https://xn--o39an51b2re.com/chart/melon/realtime/trend/ranking/{TRACK_IDS['melon_realtime']}") if TRACK_IDS['melon_realtime'] else "미진입🚨"
     m_top = calculate_change(f"https://xn--o39an51b2re.com/chart/melon/top100/trend/ranking/{TRACK_IDS['melon_top100']}") if TRACK_IDS['melon_top100'] else "미진입🚨"
     m_hot = calculate_change(f"https://xn--o39an51b2re.com/chart/melon/hot100-d30/trend/ranking/{TRACK_IDS['melon_hot100']}") if TRACK_IDS['melon_hot100'] else "미진입🚨"
@@ -110,6 +111,7 @@ def main():
     genie = calculate_change(f"https://xn--o39an51b2re.com/chart/genie/realtime/trend/ranking/{TRACK_IDS['genie_realtime']}") if TRACK_IDS['genie_realtime'] else "미진입🚨"
     bugs = calculate_change(f"https://xn--o39an51b2re.com/chart/bugs/realtime/trend/ranking/{TRACK_IDS['bugs_realtime']}") if TRACK_IDS['bugs_realtime'] else "미진입🚨"
 
+    # 💡 변동폭 결과값(m_rt, m_top 등)이 문자열에 정확히 매칭되도록 조립
     message_content = (
         f"{current_time_str}\n"
         f"{TRACK_TAGS}\n"
