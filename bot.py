@@ -16,7 +16,6 @@ TRACK_IDS = {
     "bugs_realtime":  "6488138"      # 벅스 실시간 ID
 }
 
-# 디스코드 웹훅 URL
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1524901754674872564/TXclUDd3qlaRFtMQoqCtCQhMOteXphf9_3wPi4DAKa0K13GjsKeomVBqNf92YL9touW0"
 # =========================================================================
 
@@ -28,57 +27,87 @@ def get_kst_now():
     """서버 위치와 상관없이 무조건 한국 시간(KST)을 반환하는 함수"""
     kst_zone = timezone(timedelta(hours=9))
     return datetime.now(kst_zone)
-    
-def parse_guyso_rank(url):
-    """가이섬 사이트에서 '한국 날짜'의 '한국 시간' 순위를 정확히 긁어오는 함수"""
+
+def check_chart_out(element):
+    """태그가 비어있거나 검은색(차트아웃)인지 판별하는 함수"""
+    if not element:
+        return True
+    text = element.text.strip()
+    if not text or "background-color: black" in str(element) or "background: black" in str(element):
+        return True
+    return False
+
+def calculate_change(current_url):
+    """현재 순위와 직전 순위를 비교하여 변동 폭을 계산하는 함수"""
     try:
-        res = requests.get(url, headers=HEADERS)
+        res = requests.get(current_url, headers=HEADERS)
         if res.status_code != 200:
             return "미진입🚨"
             
         soup = BeautifulSoup(res.text, "html.parser")
         
-        # 💡 [수정] 무조건 한국 시간(KST) 기준으로 계산합니다.
+        # 1. 한국 시간 기준으로 현재 시각과 1시간 전 시각 구하기
         kst_now = get_kst_now()
+        kst_prev = kst_now - timedelta(hours=1)
+        
         today_str = kst_now.strftime("%Y%m%d")
+        prev_date_str = kst_prev.strftime("%Y%m%d")
+        
         current_hour = kst_now.hour
-        target_class = f"thour{current_hour}"
+        prev_hour = kst_prev.hour
         
+        # 2. 가이섬 행(tr) 파싱
         all_rows = soup.find_all("tr")
-        target_row = None
         
+        curr_element = None
+        prev_element = None
+        
+        # 오늘 행과 (필요시) 어제 행에서 각각 해당 시간 칸 찾기
         for row in all_rows:
             first_cell = row.find("td")
-            if first_cell and today_str in first_cell.text:
-                target_row = row
-                break
+            if first_cell:
+                if today_str in first_cell.text:
+                    curr_element = row.find("td", class_=f"thour{current_hour}")
+                if prev_date_str in first_cell.text:
+                    prev_element = row.find("td", class_=f"thour{prev_hour}")
         
-        if target_row:
-            rank_element = target_row.find("td", class_=target_class)
-            if rank_element:
-                rank_text = rank_element.text.strip()
-                if not rank_text or "background-color: black" in str(rank_element) or "background: black" in str(rank_element):
-                    return "미진입🚨"
-                return f"{rank_text}위"
+        # 3. 변동 판독 로직
+        is_curr_out = check_chart_out(curr_element)
+        is_prev_out = check_chart_out(prev_element)
         
-        return "미진입🚨"
+        if is_curr_out:
+            return "미진입🚨"
+            
+        curr_rank = int(curr_element.text.strip())
+        
+        if is_prev_out:
+            return f"{curr_rank}위( - )"
+            
+        prev_rank = int(prev_element.text.strip())
+        
+        # 순위 비교 (순위 숫자가 낮아질수록 오른 것임)
+        if curr_rank < prev_rank:
+            return f"{curr_rank}위( ▲ {prev_rank - curr_rank} )"
+        elif curr_rank > prev_rank:
+            return f"{curr_rank}위( ▼ {curr_rank - prev_rank} )"
+        else:
+            return f"{curr_rank}위( - )"
+            
     except:
         return "미진입🚨"
-        
+
 def main():
-    # 💡 [수정] 디스코드용 시간 포맷팅도 한국 시간 기준으로 처리합니다.
     kst_now = get_kst_now()
     current_time_str = kst_now.strftime("%m/%d %H시")
     
-    # 각 차트별 크롤링 (ID가 없으면 미진입 처리)
-    m_rt = parse_guyso_rank(f"https://xn--o39an51b2re.com/chart/melon/realtime/trend/ranking/{TRACK_IDS['melon_realtime']}") if TRACK_IDS['melon_realtime'] else "미진입🚨"
-    m_top = parse_guyso_rank(f"https://xn--o39an51b2re.com/chart/melon/top100/trend/ranking/{TRACK_IDS['melon_top100']}") if TRACK_IDS['melon_top100'] else "미진입🚨"
-    m_hot = parse_guyso_rank(f"https://xn--o39an51b2re.com/chart/melon/hot100-d30/trend/ranking/{TRACK_IDS['melon_hot100']}") if TRACK_IDS['melon_hot100'] else "미진입🚨"
-    flo = parse_guyso_rank(f"https://xn--o39an51b2re.com/chart/flo/24hour/trend/ranking/{TRACK_IDS['flo_chart']}") if TRACK_IDS['flo_chart'] else "미진입🚨"
-    genie = parse_guyso_rank(f"https://xn--o39an51b2re.com/chart/genie/realtime/trend/ranking/{TRACK_IDS['genie_realtime']}") if TRACK_IDS['genie_realtime'] else "미진입🚨"
-    bugs = parse_guyso_rank(f"https://xn--o39an51b2re.com/chart/bugs/realtime/trend/ranking/{TRACK_IDS['bugs_realtime']}") if TRACK_IDS['bugs_realtime'] else "미진입🚨"
+    # 순위 및 변동폭 계산
+    m_rt = calculate_change(f"https://xn--o39an51b2re.com/chart/melon/realtime/trend/ranking/{TRACK_IDS['melon_realtime']}") if TRACK_IDS['melon_realtime'] else "미진입🚨"
+    m_top = calculate_change(f"https://xn--o39an51b2re.com/chart/melon/top100/trend/ranking/{TRACK_IDS['melon_top100']}") if TRACK_IDS['melon_top100'] else "미진입🚨"
+    m_hot = calculate_change(f"https://xn--o39an51b2re.com/chart/melon/hot100-d30/trend/ranking/{TRACK_IDS['melon_hot100']}") if TRACK_IDS['melon_hot100'] else "미진입🚨"
+    flo = calculate_change(f"https://xn--o39an51b2re.com/chart/flo/24hour/trend/ranking/{TRACK_IDS['flo_chart']}") if TRACK_IDS['flo_chart'] else "미진입🚨"
+    genie = calculate_change(f"https://xn--o39an51b2re.com/chart/genie/realtime/trend/ranking/{TRACK_IDS['genie_realtime']}") if TRACK_IDS['genie_realtime'] else "미진입🚨"
+    bugs = calculate_change(f"https://xn--o39an51b2re.com/chart/bugs/realtime/trend/ranking/{TRACK_IDS['bugs_realtime']}") if TRACK_IDS['bugs_realtime'] else "미진입🚨"
 
-    # 메시지 조립
     message_content = (
         f"{current_time_str}\n"
         f"{TRACK_TAGS}\n"
